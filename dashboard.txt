@@ -1,0 +1,187 @@
+GET _search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+
+GET /test_index_01
+
+
+
+DELETE /test_index_01
+
+DELETE /my-nlp-index
+GET /_ingest/pipeline/
+
+POST /_plugins/_ml/models/_register
+{
+  "name": "huggingface/sentence-transformers/msmarco-distilbert-base-tas-b",
+  "version": "1.0.1",
+  "model_format": "TORCH_SCRIPT"
+}
+
+GET _plugins/_ml/models/_search
+{
+  "query": {
+    "match_all": {}
+  }
+}
+
+GET _plugins/_ml/models/SKE4F5kBTyoUJ0useXad
+
+POST _plugins/_ml/models/SKE4F5kBTyoUJ0useXad/_deploy
+
+GET /_plugins/_ml/tasks/X7Q-F5kBPwGC4Q-0vp_R
+
+POST /_plugins/_flow_framework/workflow?use_case=semantic_search&provision=true
+{
+  "create_ingest_pipeline.model_id": "SKE4F5kBTyoUJ0useXad",
+  "output_dimension": 768
+}
+
+GET /_plugins/_flow_framework/workflow/c7RLF5kBPwGC4Q-0Yp84/_status
+
+GET /_search/pipeline/nlp-search-pipeline
+PUT /_search/pipeline/nlp-search-pipeline
+{
+  "description": "Post processor for hybrid search",
+  "phase_results_processors": [
+    {
+      "normalization-processor": {
+        "normalization": {
+          "technique": "min_max"
+        },
+        "combination": {
+          "technique": "arithmetic_mean",
+          "parameters": {
+            "weights": [
+              0.1,
+              0.9
+            ]
+          },
+          "post_filter": {
+          "min_score": 0.7
+        }
+        }
+      }
+    }
+  ]
+}
+
+GET /test_index_01
+
+PUT /test_index_01
+{
+  "settings": {
+    "index.knn": true,
+    "default_pipeline": "nlp-ingest-pipeline"
+  },
+  "mappings": {
+    "properties": {
+      "passage_embedding": {
+        "type": "knn_vector",
+        "dimension": 768,
+        "method": {
+          "engine": "lucene",
+          "space_type": "cosinesimil",
+          "name": "hnsw",
+          "parameters": {}
+        }
+      },
+      "passage_text": {
+        "type": "text"
+      },
+      "id": {
+        "type": "text"
+      }
+    }
+  }
+}
+
+PUT /test_index_01/_doc/1
+{
+  "passage_text": "DragonScale_Scorched_PBR_v2",
+  "id": "s1"
+}
+
+PUT /test_index_01/_doc/2
+{
+  "passage_text": "Ancient_Wyrm_Scales_4K",
+  "id": "s2"
+}
+
+PUT /test_index_01/_doc/4
+{
+  "passage_text": "Spongebob",
+  "id": "s4"
+}
+
+GET /test_index_01/_search
+{
+  "_source": {
+    "excludes": [
+      "passage_embedding"
+    ]
+  },
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "script_score": {
+            "query": {
+              "neural": {
+                "passage_embedding": {
+                  "query_text": "Dragon Wyrm",
+                  "model_id": "SKE4F5kBTyoUJ0useXad",
+                  "k": 5
+                }
+              }
+            },
+            "script": {
+              "source": "_score"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+GET /test_index_01/_search?search_pipeline=nlp-search-pipeline
+{
+  "_source": {
+    "exclude": [
+      "passage_embedding"
+    ]
+  },
+  "min_score": 0.7,
+  "query": {
+    "hybrid": {
+      "queries": [
+        {
+          "match": {
+            "passage_text": {
+              "query": "show me Dragon results"
+            }
+          }
+        },
+        {
+          "neural": {
+            "passage_embedding": {
+              "query_text": "show me Dragon results"
+,
+              "model_id": "SKE4F5kBTyoUJ0useXad",
+              "k": 5
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+
+
+
